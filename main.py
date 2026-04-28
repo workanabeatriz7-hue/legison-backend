@@ -1,26 +1,22 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import os
-from dotenv import load_dotenv
+import os, requests
 from openai import OpenAI
-
-# Importando a nossa configuração do Banco de Dados
 from database import SessionLocal, engine
 import models
 
-load_dotenv()
+# Inicialização da OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Criação das tabelas no banco de dados
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="LegisON API", description="Motor do Assistente Jurídico Inteligente")
+app = FastAPI()
 
-# Aqui incluímos o espaço para a "dissertação" livre que o Tony pediu
-class DadosLead(BaseModel):
-    nome: str
-    area_direito: str
-    relato_do_cliente: str 
+# Variáveis de Ambiente (Configuradas no Render)
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
 def get_db():
     db = SessionLocal()
@@ -31,60 +27,58 @@ def get_db():
 
 @app.get("/")
 def home():
-    return {"status": "online", "mensagem": "API do LegisON.ia está rodando perfeitamente! 🚀"}
+    return {"status": "API do LegisON.ia está rodando perfeitamente!"}
 
-@app.post("/gerar-peticao/")
-def gerar_peticao(dados: DadosLead, db: Session = Depends(get_db)):
+# --- ROTAS DO WHATSAPP (WEBHOOK) ---
+
+# 1. Validação do Webhook (O "Aperto de Mão" com a Meta)
+@app.get("/webhook")
+def verify_webhook(request: Request):
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
     
-    # 1. Garante que o Advogado (Tony) existe no banco
-    advogado = db.query(models.Advogado).first()
-    if not advogado:
-        advogado = models.Advogado(nome="Tony Silvério", email="tony@legison.com")
-        db.add(advogado)
-        db.commit()
-        db.refresh(advogado)
+    if token == "legison_token_secreto":
+        return Response(content=challenge, media_type="text/plain")
+    return "Token de verificação inválido"
 
-    # 2. Salva o Cliente no banco de dados
-    novo_lead = models.Lead(
-        tenant_id=advogado.id,
-        nome=dados.nome,
-        telefone="11999999999", 
-        area_direito=dados.area_direito
-    )
-    db.add(novo_lead)
-    db.commit()
-    db.refresh(novo_lead)
-
-    # 3. O "Cérebro" da IA refinado para ler o textão do cliente
-    prompt_sistema = f"""
-    Você é um assistente jurídico sênior altamente qualificado no Brasil, especialista em Direito {dados.area_direito}.
-    Sua tarefa é ler o relato cru e informal do cliente e transformar isso em um parágrafo inicial formal e técnico de uma petição inicial.
-    Foque apenas nos fatos juridicamente relevantes. Não invente leis, use apenas a legislação vigente e jurisprudência aplicável.
-    """
+# 2. Recebimento e Resposta de Mensagens
+@app.post("/webhook")
+async def receive_whatsapp(request: Request):
+    data = await request.json()
     
-    prompt_usuario = f"Nome do Cliente: {dados.nome}\nRelato do Cliente (com as próprias palavras): {dados.relato_do_cliente}\n\nEscreva a introdução da petição."
+    try:
+        # Extrai a mensagem e o número do remetente
+        entry = data['entry'][0]['changes'][0]['value']
+        if 'messages' in entry:
+            message = entry['messages'][0]
+            sender_number = message['from']
+            text_received = message['text']['body']
 
-    resposta = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": prompt_sistema},
-            {"role": "user", "content": prompt_usuario}
-        ],
-        temperature=0.3
-    )
-    texto_peticao = resposta.choices[0].message.content
+            # A IA processa o relato do cliente
+            resposta_ia = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "Você é o assistente jurídico LegisON. Sua função é ouvir o relato do cliente, ser empático e organizar os pontos principais para uma petição. Responda de forma profissional e breve."},
+                    {"role": "user", "content": text_received}
+                ],
+                max_tokens=500
+            ).choices[0].message.content
 
-    # 4. Salva a Petição gerada no banco de dados
-    nova_peticao = models.Peticao(
-        tenant_id=advogado.id,
-        lead_id=novo_lead.id,
-        conteudo_gerado=texto_peticao
-    )
-    db.add(nova_peticao)
-    db.commit()
+            # Envia a resposta de volta para o WhatsApp do cliente via API da Meta
+            url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+            headers = {
+                "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": sender_number,
+                "type": "text",
+                "text": {"body": resposta_ia}
+            }
+            requests.post(url, json=payload, headers=headers)
+
+    except Exception as e:
+        print(f"Erro ao processar mensagem: {e}")
     
-    return {
-        "mensagem": "Sucesso! Tudo salvo no Banco de Dados. 💾",
-        "cliente": novo_lead.nome,
-        "peticao_gerada": texto_peticao
-    }
+    return {"status": "ok"}
