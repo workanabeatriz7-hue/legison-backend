@@ -4,3 +4,5 @@ openai
 sqlalchemy
 python-dotenv
 requests
+streamlit
+fpdf
