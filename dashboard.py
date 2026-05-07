@@ -7,7 +7,7 @@ import requests
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="LegisON - Assistente Jurídico", layout="wide")
 
-# --- SISTEMA DE LOGIN (ESTRUTURA SAAS MULTI-TENANT) ---
+# --- SISTEMA DE LOGIN (AGORA COM TRAVA DE SEGURANÇA REAL) ---
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
 
@@ -18,16 +18,19 @@ if not st.session_state["logado"]:
     
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        st.info("Aceda com as suas credenciais para gerir o seu escritório.")
-        usuario = st.text_input("E-mail corporativo", placeholder="advogado@exemplo.com")
+        st.info("Acesso Restrito: Insira suas credenciais.")
+        usuario = st.text_input("E-mail corporativo")
         senha = st.text_input("Senha", type="password")
         
         if st.button("Aceder à Plataforma", type="primary", use_container_width=True):
-            if usuario and senha:
+            # TRAVA DE SEGURANÇA: Só entra com essas credenciais agora.
+            if usuario == "admin@legison.com" and senha == "admin123":
                 st.session_state["logado"] = True
                 st.rerun()
+            elif usuario or senha:
+                st.error("Credenciais inválidas. Sistema protegido contra acesso não autorizado.")
             else:
-                st.error("Introduza o e-mail e a senha.")
+                st.warning("Preencha e-mail e senha.")
 else:
     # --- FUNÇÃO GERADORA DE PDF PREMIUM ---
     def gerar_pdf_premium(titulo, cliente, linhas_relatorio, total):
@@ -94,7 +97,7 @@ else:
     st.sidebar.markdown(f"**Escritório:** Licença Ativa")
     menu = st.sidebar.radio("Navegação", [
         "📊 Dashboard de Leads", 
-        "🧮 Calculadoras Jurídicas", # NOME ALTERADO AQUI
+        "🧮 Calculadoras Jurídicas", 
         "🤖 Simulador de IA (Testes)"
     ])
     st.sidebar.divider()
@@ -122,14 +125,13 @@ else:
         }
         st.dataframe(pd.DataFrame(dados), use_container_width=True, hide_index=True)
 
-    # --- TELA 2: AS 3 CALCULADORAS (TRABALHO, PREVIDÊNCIA, CONSUMIDOR) ---
+    # --- TELA 2: CALCULADORAS ---
     elif menu == "🧮 Calculadoras Jurídicas":
         st.title("Calculadoras Estratégicas (MVP)")
         cliente_nome = st.text_input("👤 Nome do Cliente (Para o Relatório PDF)")
         st.divider()
         
-        # ABAS ATUALIZADAS PARA AS 3 ÁREAS
-        tab1, tab2, tab3 = st.tabs(["🔹 Direito Trabalhista", "🔹 Direito Previdenciário", "🔹 Direito do Consumidor"])
+        tab1, tab2, tab3 = st.tabs(["🔹 Trabalhista", "🔹 Previdenciário", "🔹 Consumidor"])
         
         with tab1:
             st.subheader("Cálculo Trabalhista (Rescisão CLT)")
@@ -174,35 +176,68 @@ else:
                 pdf = gerar_pdf_premium("Relatorio de Valor da Causa - Consumidor", cliente_nome, linhas, total_cons)
                 st.download_button("📄 Descarregar PDF Consumidor", data=pdf, file_name="consumidor_legison.pdf", mime="application/pdf")
 
-    # --- TELA 3: SIMULADOR DE IA ---
+    # --- TELA 3: SIMULADOR DE IA (NOVO FLUXO GUIADO E PRÉ-FORMULÁRIOS) ---
     elif menu == "🤖 Simulador de IA (Testes)":
         st.title("🤖 Laboratório de Inteligência Artificial")
-        st.markdown("**Teste o motor de IA:** Insira o relato do cliente e veja a geração da petição preliminar.")
+        st.markdown("**Fluxo Guiado de Triagem:** Selecione a área jurídica para abrir o pré-formulário específico.")
         st.divider()
         
-        relato = st.text_area("Descreva o caso do lead para análise da IA:", height=150)
+        area = st.selectbox("1. Área Jurídica do Atendimento:", ["Selecione uma opção...", "Direito Trabalhista", "Direito Previdenciário", "Direito do Consumidor"])
         
-        if st.button("✨ Analisar Caso e Gerar Minuta", type="primary"):
-            if relato:
-                with st.spinner("O motor LegisON está a processar os dados..."):
-                    # CHAVE DIVIDIDA PARA SEGURANÇA
-                    p1 = "sk-proj-NNpeGZ5Xj5PYP4tnlH6py8PWmIpfhVgofEoBvX"
-                    p2 = "SQsWHaJiEZ1QepCUXmB59QQEYTC59WfGXh4AT3BlbkFJG3CQQbqYtXLAeizTotpoIxvpzIRJS0gdLZwHJ9m28vdovo6dN5evaREoQs7hlyeGSYXK2CuswA"
-                    API_KEY = p1 + p2
-                    
-                    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-                    prompt = f"És um assistente jurídico sênior especializado em Direito Trabalhista, Previdenciário e Consumidor. Analisa este caso e gera uma petição preliminar: {relato}"
-                    payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": prompt}]}
-                    
-                    try:
-                        res = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-                        data = res.json()
-                        if 'choices' in data:
-                            st.success("✅ Petição Preliminar Gerada com Sucesso!")
-                            st.markdown(data['choices'][0]['message']['content'])
-                        else:
-                            st.error(f"Erro OpenAI: {data}")
-                    except:
-                        st.error("Falha na ligação com o motor de IA.")
-            else:
-                st.warning("Por favor, introduza o relato do caso.")
+        relato_estruturado = ""
+        
+        # PRÉ-FORMULÁRIOS DINÂMICOS
+        if area == "Direito Trabalhista":
+            st.info("📝 Pré-Formulário: Triagem Trabalhista")
+            colA, colB = st.columns(2)
+            cargo = colA.text_input("Qual o cargo ocupado?")
+            tempo = colB.text_input("Tempo de serviço (Ex: 2 anos e 3 meses)")
+            fatos = st.text_area("Descreva as violações (Ex: não pagava horas extras, sem carteira assinada)")
+            if cargo and tempo and fatos:
+                relato_estruturado = f"Área: {area}. Cargo: {cargo}. Tempo de Serviço: {tempo}. Fatos/Violações: {fatos}"
+
+        elif area == "Direito Previdenciário":
+            st.info("📝 Pré-Formulário: Triagem Previdenciária")
+            colA, colB = st.columns(2)
+            tipo_beneficio = colA.selectbox("Tipo de Benefício:", ["Aposentadoria por Idade", "Auxílio Doença", "BPC/LOAS", "Pensão por Morte"])
+            idade = colB.text_input("Idade do Requerente")
+            fatos = st.text_area("Qual o motivo da recusa no INSS ou problema relatado?")
+            if tipo_beneficio and idade and fatos:
+                relato_estruturado = f"Área: {area}. Benefício Solicitado: {tipo_beneficio}. Idade: {idade}. Relato do problema: {fatos}"
+
+        elif area == "Direito do Consumidor":
+            st.info("📝 Pré-Formulário: Triagem de Defesa do Consumidor")
+            colA, colB = st.columns(2)
+            empresa = colA.text_input("Empresa/Fornecedor (Réu)")
+            tipo_problema = colB.selectbox("Tipo de Problema:", ["Produto com Defeito", "Cobrança Indevida", "Voo Cancelado/Atraso", "Corte de Serviço"])
+            fatos = st.text_area("Detalhe os prejuízos sofridos e tentativas de contato:")
+            if empresa and tipo_problema and fatos:
+                relato_estruturado = f"Área: {area}. Empresa Ré: {empresa}. Categoria do Problema: {tipo_problema}. Fatos e Prejuízos: {fatos}"
+        
+        st.divider()
+        
+        # BOTÃO DA IA
+        if area != "Selecione uma opção...":
+            if st.button("✨ Gerar Petição com IA a partir do Formulário", type="primary"):
+                if relato_estruturado:
+                    with st.spinner("O motor LegisON está analisando o formulário e redigindo a peça..."):
+                        p1 = "sk-proj-NNpeGZ5Xj5PYP4tnlH6py8PWmIpfhVgofEoBvX"
+                        p2 = "SQsWHaJiEZ1QepCUXmB59QQEYTC59WfGXh4AT3BlbkFJG3CQQbqYtXLAeizTotpoIxvpzIRJS0gdLZwHJ9m28vdovo6dN5evaREoQs7hlyeGSYXK2CuswA"
+                        API_KEY = p1 + p2
+                        
+                        headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+                        prompt = f"És um assistente jurídico sênior especializado no Brasil. Analise o seguinte formulário de triagem de cliente e redija um esboço profissional de Petição Preliminar formatada. Dados: {relato_estruturado}"
+                        payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": prompt}]}
+                        
+                        try:
+                            res = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+                            data = res.json()
+                            if 'choices' in data:
+                                st.success("✅ Petição Preliminar Gerada com Sucesso!")
+                                st.markdown(data['choices'][0]['message']['content'])
+                            else:
+                                st.error(f"Erro de Cota/Saldo na OpenAI: {data}")
+                        except:
+                            st.error("Falha na ligação com a API da OpenAI.")
+                else:
+                    st.warning("Preencha todos os campos do pré-formulário acima para a IA ter contexto suficiente.")
