@@ -34,29 +34,25 @@ else:
         pdf = FPDF()
         pdf.add_page()
         
-        # 1. Cabeçalho Corporativo (Header)
         pdf.set_fill_color(33, 37, 41) 
         pdf.set_text_color(255, 255, 255) 
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(0, 15, txt=" LegisON - Inteligencia Juridica", ln=True, align='L', fill=True)
         pdf.ln(5)
         
-        # 2. Título do Documento
         pdf.set_text_color(40, 40, 40)
         pdf.set_font("Arial", 'B', 14)
         pdf.cell(0, 10, txt=titulo.upper(), ln=True, align='C')
         pdf.ln(2)
         
-        # 3. Informações do Reclamante e Data
         pdf.set_fill_color(240, 240, 240)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", 'B', 10)
         cliente_nome = cliente.upper() if cliente else 'CLIENTE NAO INFORMADO'
         data_atual = datetime.now().strftime("%d/%m/%Y as %H:%M")
-        pdf.cell(0, 10, txt=f" RECLAMANTE: {cliente_nome}   |   DATA: {data_atual}", ln=True, align='L', fill=True)
+        pdf.cell(0, 10, txt=f" RECLAMANTE/AUTOR: {cliente_nome}   |   DATA: {data_atual}", ln=True, align='L', fill=True)
         pdf.ln(5)
         
-        # 4. Tabela de Valores
         pdf.set_font("Arial", 'B', 11)
         pdf.set_text_color(255, 255, 255)
         pdf.set_fill_color(60, 60, 60)
@@ -80,14 +76,12 @@ else:
             
         pdf.ln(5)
         
-        # 5. Totalizador
         pdf.set_font("Arial", 'B', 14)
         pdf.set_text_color(0, 80, 40)
         pdf.cell(130, 12, txt=" TOTAL FINAL ESTIMADO:", border=1, align='R')
         pdf.set_fill_color(225, 245, 225)
         pdf.cell(60, 12, txt=f" R$ {total:,.2f} ", border=1, ln=True, align='R', fill=True)
         
-        # 6. Rodapé Legal
         pdf.set_y(-25)
         pdf.set_font("Arial", 'I', 8)
         pdf.set_text_color(160, 160, 160)
@@ -100,7 +94,7 @@ else:
     st.sidebar.markdown(f"**Escritório:** Licença Ativa")
     menu = st.sidebar.radio("Navegação", [
         "📊 Dashboard de Leads", 
-        "🧮 Calculadora Trabalhista", 
+        "🧮 Calculadoras Jurídicas", # NOME ALTERADO AQUI
         "🤖 Simulador de IA (Testes)"
     ])
     st.sidebar.divider()
@@ -128,22 +122,23 @@ else:
         }
         st.dataframe(pd.DataFrame(dados), use_container_width=True, hide_index=True)
 
-    # --- TELA 2: CALCULADORA COMPLETA ---
-    elif menu == "🧮 Calculadora Trabalhista":
-        st.title("Calculadora Estratégica Jurídica")
+    # --- TELA 2: AS 3 CALCULADORAS (TRABALHO, PREVIDÊNCIA, CONSUMIDOR) ---
+    elif menu == "🧮 Calculadoras Jurídicas":
+        st.title("Calculadoras Estratégicas (MVP)")
         cliente_nome = st.text_input("👤 Nome do Cliente (Para o Relatório PDF)")
         st.divider()
         
-        tab1, tab2, tab3 = st.tabs(["🔹 Rescisão CLT", "🔹 Horas Extras", "🔹 Atualização de Valores"])
+        # ABAS ATUALIZADAS PARA AS 3 ÁREAS
+        tab1, tab2, tab3 = st.tabs(["🔹 Direito Trabalhista", "🔹 Direito Previdenciário", "🔹 Direito do Consumidor"])
         
         with tab1:
-            st.subheader("Cálculo de Rescisão")
+            st.subheader("Cálculo Trabalhista (Rescisão CLT)")
             c1, c2 = st.columns(2)
             salario = c1.number_input("Salário Mensal (R$)", value=2500.0, key="res_s")
             meses = c2.number_input("Meses Trabalhados (Proporcional)", min_value=1, max_value=12, value=8)
             saldo_fgts = c1.number_input("Saldo para Fins Rescisórios", value=2000.0)
             
-            if st.button("Calcular Rescisão Completa", type="primary"):
+            if st.button("Calcular Rescisão", type="primary"):
                 d13 = (meses / 12) * salario
                 fer = (meses / 12) * salario * (4/3)
                 multa = saldo_fgts * 0.40
@@ -151,38 +146,33 @@ else:
                 st.success(f"**Estimativa Total: R$ {total:,.2f}**")
                 linhas = [f"13o Salario Proporcional: R$ {d13:,.2f}", f"Ferias Proporcionais + 1/3: R$ {fer:,.2f}", f"Indenizacao Multa FGTS (40%): R$ {multa:,.2f}"]
                 pdf = gerar_pdf_premium("Relatorio de Rescisao Contratual", cliente_nome, linhas, total)
-                st.download_button("📄 Descarregar PDF Premium", data=pdf, file_name="rescisao_legison.pdf", mime="application/pdf")
+                st.download_button("📄 Descarregar PDF Trabalhista", data=pdf, file_name="rescisao_legison.pdf", mime="application/pdf")
 
         with tab2:
-            st.subheader("Cálculo de Horas Extras")
+            st.subheader("Cálculo Previdenciário (Atrasados INSS)")
             c3, c4 = st.columns(2)
-            sal_he = c3.number_input("Salário Base (R$)", value=2500.0, key="he_s")
-            qtd_he = c4.number_input("Total de Horas Extras", value=15)
-            adic = c3.selectbox("Adicional", ["50%", "100%"])
+            beneficio = c3.number_input("Valor do Benefício Mensal (R$)", value=1412.0, key="prev_b")
+            meses_atraso = c4.number_input("Meses em Atraso (Retroativo)", value=12, key="prev_m")
             
-            if st.button("Calcular Horas Extras", type="primary"):
-                v_hora = sal_he / 220
-                fator = 1.5 if adic == "50%" else 2.0
-                total_he = (v_hora * fator) * qtd_he
-                st.success(f"**Total HE: R$ {total_he:,.2f}**")
-                linhas = [f"Valor da Hora Base: R$ {v_hora:,.2f}", f"Adicional Aplicado: {adic}", f"Quantidade Calculada: {qtd_he} horas"]
-                pdf = gerar_pdf_premium("Relatorio de Horas Extras", cliente_nome, linhas, total_he)
-                st.download_button("📄 Descarregar PDF Premium", data=pdf, file_name="horas_extras_legison.pdf", mime="application/pdf")
+            if st.button("Calcular Atrasados", type="primary"):
+                total_prev = beneficio * meses_atraso
+                st.success(f"**Estimativa Total (Sem Juros/CM): R$ {total_prev:,.2f}**")
+                linhas = [f"Valor do Beneficio Base: R$ {beneficio:,.2f}", f"Quantidade de Meses em Atraso: {meses_atraso} meses"]
+                pdf = gerar_pdf_premium("Relatorio de Atrasados - INSS", cliente_nome, linhas, total_prev)
+                st.download_button("📄 Descarregar PDF Previdenciário", data=pdf, file_name="previdenciario_legison.pdf", mime="application/pdf")
 
         with tab3:
-            st.subheader("Atualização e Juros")
+            st.subheader("Cálculo do Consumidor (Indenizações)")
             c5, c6 = st.columns(2)
-            v_orig = c5.number_input("Valor Original (R$)", value=10000.0)
-            meses_at = c6.number_input("Meses em Atraso", value=24)
-            t_juros = c5.number_input("Taxa de Juros Mensal (%)", value=1.0)
+            dano_material = c5.number_input("Dano Material Comprovado (R$)", value=1500.0, key="cons_m")
+            dano_moral = c6.number_input("Dano Moral Pleiteado (R$)", value=5000.0, key="cons_d")
             
-            if st.button("Calcular Atualização", type="primary"):
-                valor_juros = v_orig * (t_juros / 100) * meses_at
-                total_at = v_orig + valor_juros
-                st.success(f"**Valor Atualizado: R$ {total_at:,.2f}**")
-                linhas = [f"Valor Principal: R$ {v_orig:,.2f}", f"Periodo de Atraso: {meses_at} meses", f"Juros Acumulados: R$ {valor_juros:,.2f}"]
-                pdf = gerar_pdf_premium("Relatorio de Atualizacao de Valores", cliente_nome, linhas, total_at)
-                st.download_button("📄 Descarregar PDF Premium", data=pdf, file_name="atualizacao_legison.pdf", mime="application/pdf")
+            if st.button("Calcular Valor da Causa", type="primary"):
+                total_cons = dano_material + dano_moral
+                st.success(f"**Valor Total da Causa: R$ {total_cons:,.2f}**")
+                linhas = [f"Danos Materiais Estimados: R$ {dano_material:,.2f}", f"Danos Morais Pleiteados: R$ {dano_moral:,.2f}"]
+                pdf = gerar_pdf_premium("Relatorio de Valor da Causa - Consumidor", cliente_nome, linhas, total_cons)
+                st.download_button("📄 Descarregar PDF Consumidor", data=pdf, file_name="consumidor_legison.pdf", mime="application/pdf")
 
     # --- TELA 3: SIMULADOR DE IA ---
     elif menu == "🤖 Simulador de IA (Testes)":
@@ -201,7 +191,7 @@ else:
                     API_KEY = p1 + p2
                     
                     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-                    prompt = f"És um assistente jurídico sênior. Analisa este caso e gera uma petição preliminar: {relato}"
+                    prompt = f"És um assistente jurídico sênior especializado em Direito Trabalhista, Previdenciário e Consumidor. Analisa este caso e gera uma petição preliminar: {relato}"
                     payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": prompt}]}
                     
                     try:
